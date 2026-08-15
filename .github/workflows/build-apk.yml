@@ -10,6 +10,9 @@ on:
     branches: [main]
   workflow_dispatch: {} # lets you click "Run workflow" in the Actions tab anytime
 
+permissions:
+  contents: write # needed so the diagnostic log-push step can push to the repo
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -51,7 +54,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          flutter build apk --debug 2>&1 | tee build_apk.log
+          flutter build apk --debug --verbose 2>&1 | tee build_apk.log
 
       - name: Verify APK was actually produced
         id: verify_apk
@@ -60,6 +63,8 @@ jobs:
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "--- last 200 lines of build_apk.log ---"
+            tail -n 200 build_apk.log || echo "(no log file present)"
           fi
 
       - name: Save build log to repo on failure
@@ -67,9 +72,10 @@ jobs:
         run: |
           git config user.email "build-bot@local"
           git config user.name "Build Bot"
+          git fetch origin debug-logs 2>/dev/null || true
           git checkout -B debug-logs
           git add -f build_apk.log
-          git commit -m "Build failure log [skip ci]"
+          git commit -m "Build failure log [skip ci]" || echo "nothing new to commit"
           git push -f origin debug-logs
 
       - name: Fail job if APK was not produced
