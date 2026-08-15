@@ -1,0 +1,56 @@
+name: Build APK
+
+# Builds a debug APK on every push to main and on demand, since this
+# sandbox's network policy blocks the domains Flutter/Android tooling
+# needs (storage.googleapis.com for the Dart SDK, dl.google.com /
+# maven.google.com for Android SDK + Gradle deps) -- GitHub's own
+# runners have full internet access, so the build happens there instead.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # lets you click "Run workflow" in the Actions tab anytime
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by Android Gradle Plugin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0' # bump if you want a newer stable
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate Isar adapters (build_runner)
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Generate native Android project
+        # This scaffold ships Dart/Flutter source only -- the android/
+        # folder is created fresh on the runner every time, so there's
+        # nothing platform-specific to keep in sync in the repo itself.
+        run: flutter create . --platforms=android
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-tracker-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
