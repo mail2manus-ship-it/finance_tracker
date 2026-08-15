@@ -49,10 +49,21 @@ jobs:
       - name: Build debug APK
         id: build_apk
         continue-on-error: true
-        run: flutter build apk --debug 2>&1 | tee build_apk.log
+        run: |
+          set -o pipefail
+          flutter build apk --debug 2>&1 | tee build_apk.log
+
+      - name: Verify APK was actually produced
+        id: verify_apk
+        run: |
+          if [ -f build/app/outputs/flutter-apk/app-debug.apk ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Save build log to repo on failure
-        if: steps.build_apk.outcome == 'failure'
+        if: steps.build_apk.outcome == 'failure' || steps.verify_apk.outputs.found == 'false'
         run: |
           git config user.email "build-bot@local"
           git config user.name "Build Bot"
@@ -61,8 +72,8 @@ jobs:
           git commit -m "Build failure log [skip ci]"
           git push -f origin debug-logs
 
-      - name: Fail job if APK build failed
-        if: steps.build_apk.outcome == 'failure'
+      - name: Fail job if APK was not produced
+        if: steps.verify_apk.outputs.found == 'false'
         run: exit 1
 
       - name: Upload APK as a workflow artifact
