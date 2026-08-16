@@ -66,17 +66,33 @@ jobs:
           }
           EOF
 
-      - name: Inspect generated app/build.gradle (diagnostic)
+      - name: Enable core library desugaring (required by flutter_local_notifications)
+        # android/app/build.gradle.kts is Kotlin DSL (confirmed from a
+        # prior diagnostic run) -- note the "is" prefix on the boolean
+        # property, which is Kotlin's convention and easy to get wrong
+        # coming from the Groovy `coreLibraryDesugaringEnabled true` form.
         run: |
-          git config user.email "build-bot@local"
-          git config user.name "Build Bot"
-          cp android/app/build.gradle /tmp/app_build_gradle_snapshot.txt || cp android/app/build.gradle.kts /tmp/app_build_gradle_snapshot.txt || true
-          cp /tmp/app_build_gradle_snapshot.txt app_build_gradle_snapshot.txt
-          git checkout -B debug-logs
-          git add -f app_build_gradle_snapshot.txt
-          git commit -m "Snapshot generated app/build.gradle [skip ci]" || echo "nothing to commit"
-          git push -f origin debug-logs
-          git checkout main
+          python3 << 'PYEOF'
+          path = "android/app/build.gradle.kts"
+          with open(path) as f:
+              content = f.read()
+
+          content = content.replace(
+              'targetCompatibility = JavaVersion.VERSION_17\n    }',
+              'targetCompatibility = JavaVersion.VERSION_17\n        isCoreLibraryDesugaringEnabled = true\n    }'
+          )
+
+          content += '''
+          dependencies {
+              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+          }
+          '''
+
+          with open(path, "w") as f:
+              f.write(content)
+          print("Patched", path)
+          PYEOF
+          cat android/app/build.gradle.kts
 
       - name: Run tests
         continue-on-error: true # don't block the APK build on a test failure
