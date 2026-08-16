@@ -77,6 +77,10 @@ class NotificationService {
         iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      // Required by flutter_local_notifications 18.x's zonedSchedule
+      // signature (iOS-legacy parameter that later majors drop, but the
+      // resolved 18.0.1 still requires it).
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: DateTimeComponents.time, // repeat daily at this time
     );
   }
