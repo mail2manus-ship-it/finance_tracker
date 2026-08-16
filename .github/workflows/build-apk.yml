@@ -115,35 +115,44 @@ jobs:
       - name: Verify APK was actually produced
         id: verify_apk
         run: |
-          if [ -f build/app/outputs/flutter-apk/app-debug.apk ]; then
+          find . -iname "*.apk" 2>/dev/null | tee apk_search.log
+          echo "--- done searching ---" | tee -a apk_search.log
+
+          FLUTTER_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          STANDARD_AGP_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ -f "$FLUTTER_PATH" ]; then
+            echo "Found at Flutter's expected path." | tee -a apk_search.log
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          elif [ -f "$STANDARD_AGP_PATH" ]; then
+            echo "Found at the standard Android Gradle Plugin path instead: $STANDARD_AGP_PATH" | tee -a apk_search.log
+            mkdir -p build/app/outputs/flutter-apk
+            cp "$STANDARD_AGP_PATH" "$FLUTTER_PATH"
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Not at the expected Flutter path -- searching more broadly..."
-            FOUND_APK=$(find . -name "*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
+            FOUND_APK=$(find . -iname "*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
             if [ -n "$FOUND_APK" ]; then
-              echo "Found APK at: $FOUND_APK"
+              echo "Found APK via broad search at: $FOUND_APK" | tee -a apk_search.log
               mkdir -p build/app/outputs/flutter-apk
-              cp "$FOUND_APK" build/app/outputs/flutter-apk/app-debug.apk
+              cp "$FOUND_APK" "$FLUTTER_PATH"
               echo "found=true" >> "$GITHUB_OUTPUT"
             else
+              echo "No .apk found anywhere." | tee -a apk_search.log
               echo "found=false" >> "$GITHUB_OUTPUT"
-              echo "--- last 200 lines of build_apk.log ---"
-              tail -n 200 build_apk.log || echo "(no log file present)"
-              echo "--- searching entire workspace for any .apk (including intermediates) ---"
-              find . -iname "*.apk" 2>/dev/null
             fi
           fi
 
-      - name: Save build log to repo on failure
-        if: steps.build_apk.outcome == 'failure' || steps.verify_apk.outputs.found == 'false'
+      - name: Save build log to repo (always, while stabilizing this build)
+        if: always()
         run: |
           git config user.email "build-bot@local"
           git config user.name "Build Bot"
           git fetch origin debug-logs 2>/dev/null || true
           git checkout -B debug-logs
-          git add -f build_apk.log
-          git commit -m "Build failure log [skip ci]" || echo "nothing new to commit"
+          git add -f build_apk.log apk_search.log 2>/dev/null || true
+          git commit -m "Build log [skip ci]" || echo "nothing new to commit"
           git push -f origin debug-logs
+          git checkout main
 
       - name: Fail job if APK was not produced
         if: steps.verify_apk.outputs.found == 'false'
