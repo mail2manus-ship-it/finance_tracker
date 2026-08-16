@@ -155,3 +155,16 @@ jobs:
           name: finance-tracker-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30
+
+      - name: Also push APK binary to a dedicated branch
+        # actions/upload-artifact's download URL redirects to Azure blob
+        # storage, which isn't reachable from every network. Pushing the
+        # raw file to a git branch makes it fetchable through the plain
+        # GitHub API (Git Blobs endpoint) as a fallback retrieval path.
+        run: |
+          git config user.email "build-bot@local"
+          git config user.name "Build Bot"
+          git checkout -B apk-output
+          git add -f build/app/outputs/flutter-apk/app-debug.apk
+          git commit -m "Debug APK build [skip ci]"
+          git push -f origin apk-output
