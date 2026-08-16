@@ -44,6 +44,28 @@ jobs:
         # nothing platform-specific to keep in sync in the repo itself.
         run: flutter create . --platforms=android
 
+      - name: Patch missing AGP namespace in legacy plugins
+        # isar_flutter_libs (and some other older plugins) don't declare
+        # an Android `namespace`, which newer Android Gradle Plugin
+        # versions (bundled with current Flutter) require. This is a
+        # widely-used generic workaround: for any Android library
+        # subproject that doesn't declare a namespace, default it to the
+        # plugin's own group id.
+        run: |
+          cat >> android/build.gradle << 'EOF'
+
+          subprojects {
+              afterEvaluate { project ->
+                  if (project.plugins.hasPlugin("com.android.library")) {
+                      def androidExt = project.extensions.findByName("android")
+                      if (androidExt != null && androidExt.namespace == null) {
+                          androidExt.namespace = project.group
+                      }
+                  }
+              }
+          }
+          EOF
+
       - name: Run tests
         continue-on-error: true # don't block the APK build on a test failure
         run: flutter test
