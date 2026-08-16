@@ -44,22 +44,29 @@ jobs:
         # nothing platform-specific to keep in sync in the repo itself.
         run: flutter create . --platforms=android
 
-      - name: Patch missing AGP namespace in legacy plugins
-        # isar_flutter_libs (and some other older plugins) don't declare
-        # an Android `namespace`, which newer Android Gradle Plugin
-        # versions (bundled with current Flutter) require. This is a
-        # widely-used generic workaround: for any Android library
-        # subproject that doesn't declare a namespace, default it to the
-        # plugin's own group id.
+      - name: Patch missing AGP namespace + compileSdk mismatches in legacy plugins
+        # Two related ecosystem-lag issues, both fixed the same way (a
+        # root-level subprojects hook):
+        # 1. isar_flutter_libs doesn't declare an Android `namespace`,
+        #    which newer AGP requires.
+        # 2. file_picker is compiled against an older Android API level
+        #    than one of ITS OWN transitive deps (flutter_plugin_android_
+        #    lifecycle) now requires, so force every subproject to a
+        #    consistent, high-enough compileSdk.
         run: |
           cat >> android/build.gradle << 'EOF'
 
           subprojects {
               afterEvaluate { project ->
-                  if (project.plugins.hasPlugin("com.android.library")) {
+                  def isAndroidModule = project.plugins.hasPlugin("com.android.library") ||
+                                         project.plugins.hasPlugin("com.android.application")
+                  if (isAndroidModule) {
                       def androidExt = project.extensions.findByName("android")
-                      if (androidExt != null && androidExt.namespace == null) {
-                          androidExt.namespace = project.group
+                      if (androidExt != null) {
+                          if (androidExt.namespace == null) {
+                              androidExt.namespace = project.group
+                          }
+                          androidExt.compileSdkVersion = 36
                       }
                   }
               }
