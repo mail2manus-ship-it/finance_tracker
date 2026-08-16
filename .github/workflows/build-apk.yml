@@ -66,6 +66,18 @@ jobs:
           }
           EOF
 
+      - name: Inspect generated app/build.gradle (diagnostic)
+        run: |
+          git config user.email "build-bot@local"
+          git config user.name "Build Bot"
+          cp android/app/build.gradle /tmp/app_build_gradle_snapshot.txt || cp android/app/build.gradle.kts /tmp/app_build_gradle_snapshot.txt || true
+          cp /tmp/app_build_gradle_snapshot.txt app_build_gradle_snapshot.txt
+          git checkout -B debug-logs
+          git add -f app_build_gradle_snapshot.txt
+          git commit -m "Snapshot generated app/build.gradle [skip ci]" || echo "nothing to commit"
+          git push -f origin debug-logs
+          git checkout main
+
       - name: Run tests
         continue-on-error: true # don't block the APK build on a test failure
         run: flutter test
