@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/utils/transaction_filter.dart';
 import '../../data/models/expense_model.dart';
+import 'filter_providers.dart';
 import 'repository_providers.dart';
 
 /// Streams all (non-deleted) expenses, live-updating whenever the Isar
@@ -11,11 +11,6 @@ final expenseListProvider = StreamProvider<List<ExpenseModel>>((ref) {
   final repo = ref.watch(expenseRepositoryProvider);
   return repo.watchAll();
 });
-
-/// Current Search & Filter state for the Transactions tab. Shared between
-/// the expense and income filtered views so one filter bar drives both.
-final transactionFilterProvider =
-    StateProvider<TransactionFilter>((ref) => const TransactionFilter());
 
 /// Applies [transactionFilterProvider] to the live expense stream.
 /// Kept as a plain `Provider` (not another stream) since filtering is a

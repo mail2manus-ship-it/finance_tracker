@@ -29,8 +29,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0' # bump if you want a newer stable
-          channel: 'stable'
+          channel: 'stable' # latest stable -- the code uses Color.withValues() etc., which need Flutter 3.27+
           cache: true
 
       - name: Install dependencies

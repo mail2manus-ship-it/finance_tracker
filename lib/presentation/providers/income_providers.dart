@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/utils/transaction_filter.dart';
 import '../../data/models/income_model.dart';
+import 'filter_providers.dart';
 import 'repository_providers.dart';
 
 final incomeListProvider = StreamProvider<List<IncomeModel>>((ref) {
