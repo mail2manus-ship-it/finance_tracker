@@ -118,9 +118,20 @@ jobs:
           if [ -f build/app/outputs/flutter-apk/app-debug.apk ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "--- last 200 lines of build_apk.log ---"
-            tail -n 200 build_apk.log || echo "(no log file present)"
+            echo "Not at the expected Flutter path -- searching more broadly..."
+            FOUND_APK=$(find . -name "*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
+            if [ -n "$FOUND_APK" ]; then
+              echo "Found APK at: $FOUND_APK"
+              mkdir -p build/app/outputs/flutter-apk
+              cp "$FOUND_APK" build/app/outputs/flutter-apk/app-debug.apk
+              echo "found=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "found=false" >> "$GITHUB_OUTPUT"
+              echo "--- last 200 lines of build_apk.log ---"
+              tail -n 200 build_apk.log || echo "(no log file present)"
+              echo "--- searching entire workspace for any .apk (including intermediates) ---"
+              find . -iname "*.apk" 2>/dev/null
+            fi
           fi
 
       - name: Save build log to repo on failure
