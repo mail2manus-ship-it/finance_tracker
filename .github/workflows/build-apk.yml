@@ -110,7 +110,12 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          flutter build apk --debug --verbose 2>&1 | tee build_apk.log
+          # --split-per-abi: a universal debug APK (all ABIs, unstripped
+          # debug symbols) runs ~165MB, over GitHub's 100MB git push
+          # limit used by the fallback retrieval step below. Per-ABI
+          # APKs are much smaller; arm64-v8a alone covers the large
+          # majority of real Android devices.
+          flutter build apk --debug --split-per-abi --verbose 2>&1 | tee build_apk.log
 
       - name: Verify APK was actually produced
         id: verify_apk
@@ -118,28 +123,43 @@ jobs:
           find . -iname "*.apk" 2>/dev/null | tee apk_search.log
           echo "--- done searching ---" | tee -a apk_search.log
 
-          FLUTTER_PATH="build/app/outputs/flutter-apk/app-debug.apk"
-          STANDARD_AGP_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          # With --split-per-abi, Flutter/AGP name the arm64 variant
+          # "app-arm64-v8a-debug.apk" -- check likely locations for it
+          # (Flutter's normalized path, then the standard AGP path),
+          # then fall back to any arm64 apk found anywhere, then finally
+          # any apk at all (better a large universal one than nothing).
+          TARGET="build/app/outputs/flutter-apk/app-debug.apk"
+          CANDIDATES=(
+            "build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
+            "android/app/build/outputs/flutter-apk/app-arm64-v8a-debug.apk"
+            "android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
+          )
 
-          if [ -f "$FLUTTER_PATH" ]; then
-            echo "Found at Flutter's expected path." | tee -a apk_search.log
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          elif [ -f "$STANDARD_AGP_PATH" ]; then
-            echo "Found at the standard Android Gradle Plugin path instead: $STANDARD_AGP_PATH" | tee -a apk_search.log
+          FOUND_PATH=""
+          for c in "${CANDIDATES[@]}"; do
+            if [ -f "$c" ]; then
+              FOUND_PATH="$c"
+              break
+            fi
+          done
+
+          if [ -z "$FOUND_PATH" ]; then
+            FOUND_PATH=$(find . -iname "*arm64-v8a*debug*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
+          fi
+          if [ -z "$FOUND_PATH" ]; then
+            echo "No arm64 APK found; falling back to any debug APK." | tee -a apk_search.log
+            FOUND_PATH=$(find . -iname "*debug*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
+          fi
+
+          if [ -n "$FOUND_PATH" ]; then
+            echo "Using: $FOUND_PATH" | tee -a apk_search.log
+            ls -la "$FOUND_PATH" | tee -a apk_search.log
             mkdir -p build/app/outputs/flutter-apk
-            cp "$STANDARD_AGP_PATH" "$FLUTTER_PATH"
+            cp "$FOUND_PATH" "$TARGET"
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            FOUND_APK=$(find . -iname "*.apk" -not -path "*/intermediates/*" 2>/dev/null | head -1)
-            if [ -n "$FOUND_APK" ]; then
-              echo "Found APK via broad search at: $FOUND_APK" | tee -a apk_search.log
-              mkdir -p build/app/outputs/flutter-apk
-              cp "$FOUND_APK" "$FLUTTER_PATH"
-              echo "found=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "No .apk found anywhere." | tee -a apk_search.log
-              echo "found=false" >> "$GITHUB_OUTPUT"
-            fi
+            echo "No .apk found anywhere." | tee -a apk_search.log
+            echo "found=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Save build log to repo (always, while stabilizing this build)
