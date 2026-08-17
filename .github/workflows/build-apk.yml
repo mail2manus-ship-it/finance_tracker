@@ -170,10 +170,28 @@ jobs:
         # storage, which isn't reachable from every network. Pushing the
         # raw file to a git branch makes it fetchable through the plain
         # GitHub API (Git Blobs endpoint) as a fallback retrieval path.
+        id: push_apk_branch
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          {
+            git config user.email "build-bot@local"
+            git config user.name "Build Bot"
+            ls -la build/app/outputs/flutter-apk/app-debug.apk
+            git checkout -B apk-output
+            git add -f build/app/outputs/flutter-apk/app-debug.apk
+            git commit -m "Debug APK build [skip ci]"
+            git push -f origin apk-output
+          } 2>&1 | tee apk_push_output.log
+
+      - name: Save apk-push diagnostics if that step failed
+        if: steps.push_apk_branch.outcome == 'failure'
         run: |
           git config user.email "build-bot@local"
           git config user.name "Build Bot"
-          git checkout -B apk-output
-          git add -f build/app/outputs/flutter-apk/app-debug.apk
-          git commit -m "Debug APK build [skip ci]"
-          git push -f origin apk-output
+          git checkout main
+          git fetch origin debug-logs 2>/dev/null || true
+          git checkout -B debug-logs
+          git add -f apk_push_output.log
+          git commit -m "APK push diagnostics [skip ci]" || echo "nothing new to commit"
+          git push -f origin debug-logs
